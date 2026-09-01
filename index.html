@@ -5,11 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Neel Gupta</title>
 <link rel="icon" href="data:,">
-
 <noscript>
   <meta http-equiv="refresh" content="0; url=./documents/Neel_Gupta_Engineering_Portfolio.pdf">
 </noscript>
-
 <style>
   html, body { margin: 0; height: 100%; background: #1f2226; }
   main {
@@ -47,115 +45,33 @@
 (function () {
   'use strict';
 
-  /* ------------------------------------------------------------------ settings */
+  // The only thing recorded is the serial number printed alongside the QR code, plus the
+  // time it was opened. Nothing about the visitor, their device or their location is
+  // collected, stored or sent anywhere.
 
   var PDF_PATH = './documents/Neel_Gupta_Engineering_Portfolio.pdf';
-
-  // See apps-script/SETUP.md. Leave it empty and the page still works, just without
-  var TRACKING_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyRa6sydpgMVG6TfjwlnDe-tN-jzo0W95-5Fod9tE_g0oXKdYN75IP1FeERDAoS4y7qyQ/exec';
-
-  var QUEUE_KEY = 'qr-scan-queue';   // scans that could not be sent yet
-  var QUEUE_MAX = 50;
-
-  /* ------------------------------------------------------------- read the serial */
+  var TRACKING_ENDPOINT = '';
 
   var params = new URLSearchParams(window.location.search);
   var serial = params.get('sn');
 
-  var visit = {
-    serial: serial,
-    openedAt: new Date().toISOString(),
-    landingUrl: window.location.href,
-    referrer: document.referrer || null,
-    userAgent: navigator.userAgent,
-    language: navigator.language,
-    screen: window.screen ? window.screen.width + 'x' + window.screen.height : null
-  };
-
-  /* ------------------------------------------------------------------- sending */
-
-  function send(record) {
-    if (!TRACKING_ENDPOINT) return false;
-
-    if (navigator.onLine === false) return false;
-
-    var payload = JSON.stringify(record);
+  if (serial && TRACKING_ENDPOINT) {
     try {
-      var blob = new Blob([payload], { type: 'text/plain;charset=UTF-8' });
-      if (navigator.sendBeacon && navigator.sendBeacon(TRACKING_ENDPOINT, blob)) return true;
-    } catch (err) { /* fall through */ }
-    try {
-      // keepalive does the same job as a beacon for browsers without sendBeacon.
-      fetch(TRACKING_ENDPOINT, {
-        method: 'POST',
-        body: payload,
-        mode: 'no-cors',
-        keepalive: true,
-        headers: { 'Content-Type': 'text/plain;charset=UTF-8' }
-      });
-      return true;
-    } catch (err) {
-      return false;
-    }
+      navigator.sendBeacon(
+        TRACKING_ENDPOINT,
+        new Blob([JSON.stringify({ serial: serial })], { type: 'text/plain;charset=UTF-8' })
+      );
+    } catch (err) { /* never block the redirect */ }
   }
+  console.log('Serial number:', serial || '(none in this URL)');
 
-  function loadQueue() {
-    try {
-      var q = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
-      return Array.isArray(q) ? q : [];
-    } catch (err) { return []; }
-  }
-
-  function saveQueue(q) {
-    try { localStorage.setItem(QUEUE_KEY, JSON.stringify(q.slice(-QUEUE_MAX))); }
-    catch (err) { /* private mode or full — nothing useful to do */ }
-  }
-
-  /* ------------------------------------------------------------------ record it */
-
-  // Anything stranded by an earlier offline scan goes out first.
-  var queue = loadQueue();
-  if (queue.length) {
-    var stillStuck = [];
-    for (var i = 0; i < queue.length; i++) {
-      if (!send(queue[i])) stillStuck.push(queue[i]);
-    }
-    saveQueue(stillStuck);
-    console.log('Retried ' + queue.length + ' queued scan(s); ' + stillStuck.length + ' still pending.');
-  }
-
-  if (serial) {
-    console.log('%cSerial number: ' + serial,
-                'font-size:15px;font-weight:700;color:#5b8cff');
-    console.log('Scan record:', visit);
-    if (!send(visit)) {
-      // Offline, blocked, or no endpoint configured — keep it for the next visit.
-      queue = loadQueue();
-      queue.push(visit);
-      saveQueue(queue);
-      console.warn('Could not send now; queued for the next visit.');
-    }
-  } else {
-    console.warn('No serial number in this URL. Expected something like ?sn=0001-K7M2 — not recording.');
-  }
-
-  /* --------------------------------------------------------------- go to the PDF */
-
-  // Carry the serial onto the document request too, so it is visible anywhere that
-  // logs requests.
   var target = PDF_PATH + (serial ? '?sn=' + encodeURIComponent(serial) : '');
   document.getElementById('directLink').setAttribute('href', target);
 
-  // ?stay=1 holds the page so the console can be read while testing.
   if (params.get('stay') === '1') {
-    document.getElementById('note').textContent =
-      'Redirect paused (?stay=1). Use the button above to open the portfolio.';
-    console.log('Redirect paused because ?stay=1 is set.');
+    document.getElementById('note').textContent = 'Redirect paused (?stay=1).';
     return;
   }
-
-  // replace() rather than assign() so Back skips this hand-off page instead of
-  // bouncing the visitor straight back into it.
   window.location.replace(target);
 })();
 </script>
