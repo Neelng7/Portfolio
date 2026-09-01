@@ -4,12 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Neel Gupta</title>
-<!-- Suppresses the automatic /favicon.ico request, which would otherwise log a 404
-     against every single scan. -->
 <link rel="icon" href="data:,">
 
-<!-- No-JavaScript fallback. It cannot record the scan or carry the serial through
-     (a static refresh cannot read the query string), but the document still opens. -->
 <noscript>
   <meta http-equiv="refresh" content="0; url=./documents/Neel_Gupta_Engineering_Portfolio.pdf">
 </noscript>
@@ -56,7 +52,6 @@
   var PDF_PATH = './documents/Neel_Gupta_Engineering_Portfolio.pdf';
 
   // See apps-script/SETUP.md. Leave it empty and the page still works, just without
-  // recording anything.
   var TRACKING_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyRa6sydpgMVG6TfjwlnDe-tN-jzo0W95-5Fod9tE_g0oXKdYN75IP1FeERDAoS4y7qyQ/exec';
 
   var QUEUE_KEY = 'qr-scan-queue';   // scans that could not be sent yet
@@ -79,25 +74,9 @@
 
   /* ------------------------------------------------------------------- sending */
 
-  /**
-   * Hand the record to the browser and return immediately.
-   *
-   * sendBeacon is the whole trick behind "record it but redirect instantly": the browser
-   * takes ownership of the request and delivers it in the background, even after this
-   * page is gone. Nothing here waits for a response, so a slow Apps Script — and it is
-   * slow, often a second or more — costs the visitor exactly nothing.
-   *
-   * text/plain keeps it a "simple" request, so there is no CORS preflight to stall on.
-   * The response is opaque and we do not care what it says.
-   */
   function send(record) {
     if (!TRACKING_ENDPOINT) return false;
 
-    // A beacon queued while the device is offline is simply dropped — sendBeacon reports
-    // success the moment the browser accepts the payload, not when it is delivered, so
-    // it cannot tell us about a failed send. Checking here is what makes "scanned in a
-    // basement with no signal" actually recoverable: it goes to the local queue and
-    // leaves on the next visit that has a connection.
     if (navigator.onLine === false) return false;
 
     var payload = JSON.stringify(record);
