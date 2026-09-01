@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Neel Gupta</title>
 <!-- Suppresses the automatic /favicon.ico request, which would otherwise log a 404
-     against every single scan and clutter the access log. -->
+     against every single scan. -->
 <link rel="icon" href="data:,">
 
-<!-- No-JavaScript fallback. It cannot carry the serial through (a static refresh cannot
-     read the query string), but the document still opens. -->
+<!-- No-JavaScript fallback. It cannot record the scan or carry the serial through
+     (a static refresh cannot read the query string), but the document still opens. -->
 <noscript>
   <meta http-equiv="refresh" content="0; url=./documents/Neel_Gupta_Engineering_Portfolio.pdf">
 </noscript>
@@ -51,18 +51,25 @@
 (function () {
   'use strict';
 
-  var PDF_PATH = './documents/Neel_Gupta_Engineering_Portfolio.pdf';
-  var STORE_KEY = 'qr-scans';
-  var STORE_MAX = 50;
+  /* ------------------------------------------------------------------ settings */
 
-  // ---------------------------------------------------------------- read the serial
+  var PDF_PATH = './documents/Neel_Gupta_Engineering_Portfolio.pdf';
+
+  // See apps-script/SETUP.md. Leave it empty and the page still works, just without
+  // recording anything.
+  var TRACKING_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyRa6sydpgMVG6TfjwlnDe-tN-jzo0W95-5Fod9tE_g0oXKdYN75IP1FeERDAoS4y7qyQ/exec';
+
+  var QUEUE_KEY = 'qr-scan-queue';   // scans that could not be sent yet
+  var QUEUE_MAX = 50;
+
+  /* ------------------------------------------------------------- read the serial */
 
   var params = new URLSearchParams(window.location.search);
   var serial = params.get('sn');
 
   var visit = {
     serial: serial,
-    scannedAt: new Date().toISOString(),
+    openedAt: new Date().toISOString(),
     landingUrl: window.location.href,
     referrer: document.referrer || null,
     userAgent: navigator.userAgent,
@@ -70,53 +77,93 @@
     screen: window.screen ? window.screen.width + 'x' + window.screen.height : null
   };
 
-  /**
-   * Record the scan, then hand off to the PDF.
-   *
-   * This page ALWAYS redirects — every device gets the browser's own PDF viewer, which is
-   * the only thing that reliably shows the whole document. (An <iframe> renders as a
-   * single cropped, unscrollable page on iOS Safari, and not at all on Android Chrome.)
-   *
-   * Everything therefore has to be recorded BEFORE the redirect, and has to survive it:
-   *
-   *   - console.log  — wiped by the navigation unless DevTools has "Preserve log" ticked.
-   *                    Add ?stay=1 to the URL to stop the redirect and read it normally.
-   *   - localStorage — survives. Read the last 50 scans back at any time with:
-   *                        JSON.parse(localStorage.getItem('qr-scans'))
-   *
-   * To collect scans on a server, send them from here with sendBeacon — NOT a plain
-   * fetch(), which the browser cancels when the page navigates away:
-   *
-   *   navigator.sendBeacon('https://your-api.example/scan', JSON.stringify(record));
-   */
-  function recordScan(record) {
-    if (record.serial) {
-      console.log('%cSerial number: ' + record.serial,
-                  'font-size:15px;font-weight:700;color:#5b8cff');
-    } else {
-      console.warn('No serial number in this URL. Expected something like ?sn=0001-K7M2');
-    }
-    console.log('Scan record:', record);
+  /* ------------------------------------------------------------------- sending */
 
-    // Keep a local history so a scan is still inspectable after the redirect.
+  /**
+   * Hand the record to the browser and return immediately.
+   *
+   * sendBeacon is the whole trick behind "record it but redirect instantly": the browser
+   * takes ownership of the request and delivers it in the background, even after this
+   * page is gone. Nothing here waits for a response, so a slow Apps Script — and it is
+   * slow, often a second or more — costs the visitor exactly nothing.
+   *
+   * text/plain keeps it a "simple" request, so there is no CORS preflight to stall on.
+   * The response is opaque and we do not care what it says.
+   */
+  function send(record) {
+    if (!TRACKING_ENDPOINT) return false;
+
+    // A beacon queued while the device is offline is simply dropped — sendBeacon reports
+    // success the moment the browser accepts the payload, not when it is delivered, so
+    // it cannot tell us about a failed send. Checking here is what makes "scanned in a
+    // basement with no signal" actually recoverable: it goes to the local queue and
+    // leaves on the next visit that has a connection.
+    if (navigator.onLine === false) return false;
+
+    var payload = JSON.stringify(record);
     try {
-      var log = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
-      if (!Array.isArray(log)) log = [];
-      log.push(record);
-      if (log.length > STORE_MAX) log = log.slice(-STORE_MAX);
-      localStorage.setItem(STORE_KEY, JSON.stringify(log));
-      console.log('Saved to localStorage["' + STORE_KEY + '"] — ' + log.length + ' scan(s) kept.');
+      var blob = new Blob([payload], { type: 'text/plain;charset=UTF-8' });
+      if (navigator.sendBeacon && navigator.sendBeacon(TRACKING_ENDPOINT, blob)) return true;
+    } catch (err) { /* fall through */ }
+    try {
+      // keepalive does the same job as a beacon for browsers without sendBeacon.
+      fetch(TRACKING_ENDPOINT, {
+        method: 'POST',
+        body: payload,
+        mode: 'no-cors',
+        keepalive: true,
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' }
+      });
+      return true;
     } catch (err) {
-      // Private mode, or storage full/blocked. Not worth failing the redirect over.
-      console.warn('Could not write the scan to localStorage:', err.message);
+      return false;
     }
   }
 
-  recordScan(visit);
+  function loadQueue() {
+    try {
+      var q = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
+      return Array.isArray(q) ? q : [];
+    } catch (err) { return []; }
+  }
 
-  // ---------------------------------------------------------------- go to the PDF
+  function saveQueue(q) {
+    try { localStorage.setItem(QUEUE_KEY, JSON.stringify(q.slice(-QUEUE_MAX))); }
+    catch (err) { /* private mode or full — nothing useful to do */ }
+  }
 
-  // Carry the serial onto the document request too, so it also lands in server logs.
+  /* ------------------------------------------------------------------ record it */
+
+  // Anything stranded by an earlier offline scan goes out first.
+  var queue = loadQueue();
+  if (queue.length) {
+    var stillStuck = [];
+    for (var i = 0; i < queue.length; i++) {
+      if (!send(queue[i])) stillStuck.push(queue[i]);
+    }
+    saveQueue(stillStuck);
+    console.log('Retried ' + queue.length + ' queued scan(s); ' + stillStuck.length + ' still pending.');
+  }
+
+  if (serial) {
+    console.log('%cSerial number: ' + serial,
+                'font-size:15px;font-weight:700;color:#5b8cff');
+    console.log('Scan record:', visit);
+    if (!send(visit)) {
+      // Offline, blocked, or no endpoint configured — keep it for the next visit.
+      queue = loadQueue();
+      queue.push(visit);
+      saveQueue(queue);
+      console.warn('Could not send now; queued for the next visit.');
+    }
+  } else {
+    console.warn('No serial number in this URL. Expected something like ?sn=0001-K7M2 — not recording.');
+  }
+
+  /* --------------------------------------------------------------- go to the PDF */
+
+  // Carry the serial onto the document request too, so it is visible anywhere that
+  // logs requests.
   var target = PDF_PATH + (serial ? '?sn=' + encodeURIComponent(serial) : '');
   document.getElementById('directLink').setAttribute('href', target);
 
