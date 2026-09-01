@@ -5,59 +5,55 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Neel Gupta</title>
 <!-- Suppresses the automatic /favicon.ico request, which would otherwise log a 404
-     against every single scan and clutter the access log you'll be reading. -->
+     against every single scan and clutter the access log. -->
 <link rel="icon" href="data:,">
+
+<!-- No-JavaScript fallback. It cannot carry the serial through (a static refresh cannot
+     read the query string), but the document still opens. -->
+<noscript>
+  <meta http-equiv="refresh" content="0; url=./documents/Neel_Gupta_Engineering_Portfolio.pdf">
+</noscript>
+
 <style>
   html, body { margin: 0; height: 100%; background: #1f2226; }
-
-  /* The fallback sits underneath and shows through only if the viewer fails to paint. */
-  #fallback {
+  main {
     position: fixed;
     inset: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 14px;
+    gap: 16px;
     padding: 24px;
     text-align: center;
     font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
     color: #e8ebef;
   }
-  #fallback a {
+  a {
     color: #0b0e13;
     background: #5b8cff;
-    padding: 12px 22px;
+    padding: 14px 26px;
     border-radius: 8px;
     font-weight: 600;
     text-decoration: none;
   }
-  #fallback p { margin: 0; color: #98a2b3; font-size: 14px; }
-
-  #viewer {
-    position: fixed;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    border: 0;
-    background: #1f2226;
-  }
+  p { margin: 0; color: #98a2b3; font-size: 14px; }
 </style>
 </head>
 <body>
 
-<div id="fallback">
-  <a id="directLink" href="./documents/Neel_Gupta_Engineering_Portfolio.pdf">Open the PDF</a>
-  <p>If the document does not appear automatically, use the button above.</p>
-</div>
-
-<iframe id="viewer" title="Neel Gupta &mdash; Portfolio"></iframe>
+<main>
+  <a id="directLink" href="./documents/Neel_Gupta_Engineering_Portfolio.pdf">Open the portfolio</a>
+  <p id="note">Opening the portfolio&hellip;</p>
+</main>
 
 <script>
 (function () {
   'use strict';
 
   var PDF_PATH = './documents/Neel_Gupta_Engineering_Portfolio.pdf';
+  var STORE_KEY = 'qr-scans';
+  var STORE_MAX = 50;
 
   // ---------------------------------------------------------------- read the serial
 
@@ -75,18 +71,23 @@
   };
 
   /**
-   * Where the scan gets recorded.
+   * Record the scan, then hand off to the PDF.
    *
-   * For now this only writes to the console. To start collecting scans for real,
-   * send `record` to a backend from here — everything the caller needs is already
-   * on the object:
+   * This page ALWAYS redirects — every device gets the browser's own PDF viewer, which is
+   * the only thing that reliably shows the whole document. (An <iframe> renders as a
+   * single cropped, unscrollable page on iOS Safari, and not at all on Android Chrome.)
    *
-   *   fetch('https://your-api.example/scan', {
-   *     method: 'POST',
-   *     headers: { 'Content-Type': 'application/json' },
-   *     body: JSON.stringify(record),
-   *     keepalive: true          // survives the page being closed
-   *   });
+   * Everything therefore has to be recorded BEFORE the redirect, and has to survive it:
+   *
+   *   - console.log  — wiped by the navigation unless DevTools has "Preserve log" ticked.
+   *                    Add ?stay=1 to the URL to stop the redirect and read it normally.
+   *   - localStorage — survives. Read the last 50 scans back at any time with:
+   *                        JSON.parse(localStorage.getItem('qr-scans'))
+   *
+   * To collect scans on a server, send them from here with sendBeacon — NOT a plain
+   * fetch(), which the browser cancels when the page navigates away:
+   *
+   *   navigator.sendBeacon('https://your-api.example/scan', JSON.stringify(record));
    */
   function recordScan(record) {
     if (record.serial) {
@@ -96,30 +97,40 @@
       console.warn('No serial number in this URL. Expected something like ?sn=0001-K7M2');
     }
     console.log('Scan record:', record);
+
+    // Keep a local history so a scan is still inspectable after the redirect.
+    try {
+      var log = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+      if (!Array.isArray(log)) log = [];
+      log.push(record);
+      if (log.length > STORE_MAX) log = log.slice(-STORE_MAX);
+      localStorage.setItem(STORE_KEY, JSON.stringify(log));
+      console.log('Saved to localStorage["' + STORE_KEY + '"] — ' + log.length + ' scan(s) kept.');
+    } catch (err) {
+      // Private mode, or storage full/blocked. Not worth failing the redirect over.
+      console.warn('Could not write the scan to localStorage:', err.message);
+    }
   }
 
   recordScan(visit);
 
-  // ---------------------------------------------------------------- open the PDF
+  // ---------------------------------------------------------------- go to the PDF
 
-  // Carry the serial through to the document request itself, so the scan also shows up
-  // in server access logs, not just in the browser.
+  // Carry the serial onto the document request too, so it also lands in server logs.
   var target = PDF_PATH + (serial ? '?sn=' + encodeURIComponent(serial) : '');
-
-  var viewer = document.getElementById('viewer');
   document.getElementById('directLink').setAttribute('href', target);
 
-  viewer.addEventListener('load', function () {
-    console.log('PDF open' + (serial ? ' — serial ' + serial : '') +
-                ' — ' + new Date().toISOString());
-  });
+  // ?stay=1 holds the page so the console can be read while testing.
+  if (params.get('stay') === '1') {
+    document.getElementById('note').textContent =
+      'Redirect paused (?stay=1). Use the button above to open the portfolio.';
+    console.log('Redirect paused because ?stay=1 is set.');
+    return;
+  }
 
-  viewer.addEventListener('error', function () {
-    console.error('The PDF failed to load. Falling back to the direct link.');
-    viewer.style.display = 'none';
-  });
-
-  viewer.src = target;
+  // replace() rather than assign() so Back skips this hand-off page instead of
+  // bouncing the visitor straight back into it.
+  window.location.replace(target);
 })();
 </script>
 
