@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Neel Gupta</title>
+<!-- Suppresses the automatic /favicon.ico request, which would otherwise log a 404
+     against every single scan and clutter the access log you'll be reading. -->
+<link rel="icon" href="data:,">
+<style>
+  html, body { margin: 0; height: 100%; background: #1f2226; }
+
+  /* The fallback sits underneath and shows through only if the viewer fails to paint. */
+  #fallback {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 24px;
+    text-align: center;
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: #e8ebef;
+  }
+  #fallback a {
+    color: #0b0e13;
+    background: #5b8cff;
+    padding: 12px 22px;
+    border-radius: 8px;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  #fallback p { margin: 0; color: #98a2b3; font-size: 14px; }
+
+  #viewer {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: #1f2226;
+  }
+</style>
+</head>
+<body>
+
+<div id="fallback">
+  <a id="directLink" href="./documents/Neel_Gupta_Engineering_Portfolio">Open the PDF</a>
+  <p>If the document does not appear automatically, use the button above.</p>
+</div>
+
+<iframe id="viewer" title="Neel Gupta &mdash; Portfolio"></iframe>
+
+<script>
+(function () {
+  'use strict';
+
+  var PDF_PATH = './documents/Neel_Gupta_Engineering_Portfolio';
+
+  // ---------------------------------------------------------------- read the serial
+
+  var params = new URLSearchParams(window.location.search);
+  var serial = params.get('sn');
+
+  var visit = {
+    serial: serial,
+    scannedAt: new Date().toISOString(),
+    landingUrl: window.location.href,
+    referrer: document.referrer || null,
+    userAgent: navigator.userAgent,
+    language: navigator.language,
+    screen: window.screen ? window.screen.width + 'x' + window.screen.height : null
+  };
+
+  /**
+   * Where the scan gets recorded.
+   *
+   * For now this only writes to the console. To start collecting scans for real,
+   * send `record` to a backend from here — everything the caller needs is already
+   * on the object:
+   *
+   *   fetch('https://your-api.example/scan', {
+   *     method: 'POST',
+   *     headers: { 'Content-Type': 'application/json' },
+   *     body: JSON.stringify(record),
+   *     keepalive: true          // survives the page being closed
+   *   });
+   */
+  function recordScan(record) {
+    if (record.serial) {
+      console.log('%cSerial number: ' + record.serial,
+                  'font-size:15px;font-weight:700;color:#5b8cff');
+    } else {
+      console.warn('No serial number in this URL. Expected something like ?sn=0001-K7M2');
+    }
+    console.log('Scan record:', record);
+  }
+
+  recordScan(visit);
+
+  // ---------------------------------------------------------------- open the PDF
+
+  // Carry the serial through to the document request itself, so the scan also shows up
+  // in server access logs, not just in the browser.
+  var target = PDF_PATH + (serial ? '?sn=' + encodeURIComponent(serial) : '');
+
+  var viewer = document.getElementById('viewer');
+  document.getElementById('directLink').setAttribute('href', target);
+
+  viewer.addEventListener('load', function () {
+    console.log('PDF open' + (serial ? ' — serial ' + serial : '') +
+                ' — ' + new Date().toISOString());
+  });
+
+  viewer.addEventListener('error', function () {
+    console.error('The PDF failed to load. Falling back to the direct link.');
+    viewer.style.display = 'none';
+  });
+
+  viewer.src = target;
+})();
+</script>
+
+</body>
+</html>
