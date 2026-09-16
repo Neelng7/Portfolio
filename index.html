@@ -6,7 +6,7 @@
 <title>Neel Gupta</title>
 <link rel="icon" href="data:,">
 <noscript>
-  <meta http-equiv="refresh" content="0; url=https://www.linkedin.com/in/neelngupta/">
+  <meta http-equiv="refresh" content="0; url=./documents/Neel_Gupta_Engineering_Portfolio.pdf">
 </noscript>
 <style>
   html, body { margin: 0; height: 100%; background: #1f2226; }
@@ -37,8 +37,8 @@
 <body>
 
 <main>
-  <a id="directLink" href="https://www.linkedin.com/in/neelngupta/">Open LinkedIn profile</a>
-  <p id="note">Opening LinkedIn&hellip;</p>
+  <a id="directLink" href="./documents/Neel_Gupta_Engineering_Portfolio.pdf">Open the portfolio</a>
+  <p id="note">Opening the portfolio&hellip;</p>
 </main>
 
 <script>
@@ -49,7 +49,7 @@
   // time it was opened. Nothing about the visitor, their device or their location is
   // collected, stored or sent anywhere.
 
-  var DESTINATION = 'https://www.linkedin.com/in/neelngupta/';
+  var PDF_PATH = './documents/Neel_Gupta_Engineering_Portfolio.pdf';
   var TRACKING_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzhu3BCbpetGaplv_w9ARNpiT-_QLkKSAuO3f28ENe13HHkZr6IOegi6e6X_vxQzlsaQA/exec';
 
   var params = new URLSearchParams(window.location.search);
@@ -65,11 +65,14 @@
   }
   console.log('Serial number:', serial || '(none in this URL)');
 
+  var target = PDF_PATH + (serial ? '?sn=' + encodeURIComponent(serial) : '');
+  document.getElementById('directLink').setAttribute('href', target);
+
   if (params.get('stay') === '1') {
     document.getElementById('note').textContent = 'Redirect paused (?stay=1).';
     return;
   }
-  window.location.replace(DESTINATION);
+  window.location.replace(target);
 })();
 </script>
 
