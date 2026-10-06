@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Neel Gupta</title>
 <link rel="icon" href="data:,">
+<!-- CHANGE ME (2 of 2): the no-JavaScript fallback. Keep it the same as DESTINATION below. -->
 <noscript>
-  <meta http-equiv="refresh" content="0; url=./documents/Neel_Gupta_Engineering_Portfolio.pdf">
+  <meta http-equiv="refresh" content="0; url=https://www.linkedin.com/in/neelngupta/">
 </noscript>
 <style>
   html, body { margin: 0; height: 100%; background: #1f2226; }
@@ -38,7 +39,7 @@
 
 <main>
   <a id="directLink" href="./documents/Neel_Gupta_Engineering_Portfolio.pdf">Open the portfolio</a>
-  <p id="note">Opening the portfolio&hellip;</p>
+  <p id="note">Opening&hellip;</p>
 </main>
 
 <script>
@@ -49,7 +50,14 @@
   // time it was opened. Nothing about the visitor, their device or their location is
   // collected, stored or sent anywhere.
 
-  var PDF_PATH = './documents/Neel_Gupta_Engineering_Portfolio.pdf';
+  /* CHANGE ME (1 of 2) ------------------------------------------------------
+   * Where a scan sends the visitor. Edit this one line, then commit and push.
+   *   an outside site  : 'https://www.linkedin.com/in/neelngupta/'
+   *   a file in this repo : './documents/Neel_Gupta_Engineering_Portfolio.pdf'
+   * Printed QR codes never change — they point at this page, not the destination.
+   */
+  var DESTINATION = 'https://www.linkedin.com/in/neelngupta/';
+  var LINK_TEXT   = 'Open LinkedIn profile';
   var TRACKING_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzhu3BCbpetGaplv_w9ARNpiT-_QLkKSAuO3f28ENe13HHkZr6IOegi6e6X_vxQzlsaQA/exec';
 
   var params = new URLSearchParams(window.location.search);
@@ -65,8 +73,14 @@
   }
   console.log('Serial number:', serial || '(none in this URL)');
 
-  var target = PDF_PATH + (serial ? '?sn=' + encodeURIComponent(serial) : '');
-  document.getElementById('directLink').setAttribute('href', target);
+  var external = /^https?:\/\//i.test(DESTINATION);
+  var target = (!external && serial)
+    ? DESTINATION + (DESTINATION.indexOf('?') === -1 ? '?' : '&') + 'sn=' + encodeURIComponent(serial)
+    : DESTINATION;
+
+  var link = document.getElementById('directLink');
+  link.setAttribute('href', target);
+  link.textContent = LINK_TEXT;
 
   if (params.get('stay') === '1') {
     document.getElementById('note').textContent = 'Redirect paused (?stay=1).';
